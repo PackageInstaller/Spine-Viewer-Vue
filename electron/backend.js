@@ -1,13 +1,19 @@
-const {app, BrowserWindow, ipcMain, Menu, MenuItem, dialog, session} = require('electron/main')
-const {exec, spawn} = require('child_process')
+const { app, BrowserWindow, ipcMain, Menu, MenuItem, dialog, session } = require('electron/main')
+const { exec, spawn } = require('child_process')
 const path = require('path')
 // const http = require("http");
 const fs = require('fs-extra')
-const {fileURLToPath} = require('url')
+const { fileURLToPath } = require('url')
 
 app.commandLine.appendSwitch('charset', 'utf-8');
 process.env.CACHE_PATH = path.join(__dirname, 'cache')
-process.env.FFMPEG_PATH = path.join(__dirname, 'ffmpeg', 'ffmpeg.exe');
+// 根据操作系统平台设置 ffmpeg 路径
+if (process.platform === 'win32') {
+    process.env.FFMPEG_PATH = path.join(__dirname, 'ffmpeg', 'ffmpeg.exe');
+} else {
+    // Linux 和 macOS 使用系统安装的 ffmpeg
+    process.env.FFMPEG_PATH = 'ffmpeg';
+}
 
 let win;
 
@@ -40,7 +46,7 @@ const createWindow = (log) => {
         win.loadURL('http://localhost:8192').then(() => {
             win.webContents.send('logging', log)
         })
-        win.openDevTools({mode: 'detach'})
+        win.openDevTools({ mode: 'detach' })
     } else {
         win.loadFile('./dist/index.html').then(() => {
             win.webContents.send('logging', log)
@@ -87,7 +93,7 @@ app.whenReady().then(() => {
         FFMPEG_PATH: process.env.FFMPEG_PATH
     }
     if (!fs.existsSync(process.env.CACHE_PATH)) {
-        fs.mkdirSync(process.env.CACHE_PATH, {recursive: true});
+        fs.mkdirSync(process.env.CACHE_PATH, { recursive: true });
     } else {
         fs.emptydir(process.env.CACHE_PATH).then(() => console.log('Clear cache'))
     }
@@ -97,21 +103,21 @@ app.whenReady().then(() => {
 
     createWindow(log)
 
-    session.defaultSession.webRequest.onBeforeRequest({urls: ['file://*']}, (details, callback) => {
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['file://*'] }, (details, callback) => {
         const [reqUrl, queryString] = details.url.split('?')
         if (reqUrl.endsWith('.atlas')) {
             const filePath = fileURLToPath(details.url)
             if (!fs.existsSync(filePath)) {
-                callback({redirectURL: `${reqUrl}.txt?${queryString}`})
+                callback({ redirectURL: `${reqUrl}.txt?${queryString}` })
                 return
             }
         }
-        callback({cancel: false})
+        callback({ cancel: false })
     })
 
     ipcMain.handle('port', () => server.address().port)
 
-    ipcMain.on('open-devtools', () => win.webContents.openDevTools({mode: 'detach'}))
+    ipcMain.on('open-devtools', () => win.webContents.openDevTools({ mode: 'detach' }))
     ipcMain.on('minimize', () => win.minimize())
     ipcMain.on('toggle-maximize', () => win.isMaximized() ? win.unmaximize() : win.maximize())
     ipcMain.on('close', () => win.close())
@@ -131,7 +137,7 @@ app.whenReady().then(() => {
             title: 'Save image',
             defaultPath: name,
             properties: ['createDirectory'],
-            filters: [{name: 'PNG', extensions: ['png']}]
+            filters: [{ name: 'PNG', extensions: ['png'] }]
         })
         if (imagePath) {
             try {
@@ -155,7 +161,7 @@ app.whenReady().then(() => {
     ipcMain.handle('prepare-export', (ev) => {
         const pngPath = path.join(process.env.CACHE_PATH, 'png')
         if (!fs.existsSync(pngPath)) {
-            fs.mkdirSync(pngPath, {recursive: true});
+            fs.mkdirSync(pngPath, { recursive: true });
         }
     })
     ipcMain.handle('save-image-cache', (ev, image) => saveBase64Image(image))
@@ -181,7 +187,7 @@ app.whenReady().then(() => {
                 fs.move(imagePath, outputPath).then(() => {
                     win.webContents.send('export-complete')
                 }).catch(error => {
-                    win.webContents.send('logging', {name: 'move', error})
+                    win.webContents.send('logging', { name: 'move', error })
                 })
                 return
             case 'WEBM-VP9':
@@ -192,10 +198,10 @@ app.whenReady().then(() => {
         }
         const ffmpegProcess = spawn(process.env.FFMPEG_PATH, ffmpegArgs)
         ffmpegProcess.stdout.on('data', (data) => {
-            win.webContents.send('logging', {name: 'ffmpeg', stdout: data.toString()})
+            win.webContents.send('logging', { name: 'ffmpeg', stdout: data.toString() })
         })
         ffmpegProcess.stderr.on('data', (data) => {
-            win.webContents.send('logging', {name: 'ffmpeg', stderr: data.toString()})
+            win.webContents.send('logging', { name: 'ffmpeg', stderr: data.toString() })
         })
         ffmpegProcess.on('close', (code) => {
             fs.remove(imagePath).then(() => {
